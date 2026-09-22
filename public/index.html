@@ -97,12 +97,16 @@ const SAMPLE = `9/22 定例 ハッカソン準備MTG
 - ロゴどうする？ 要検討
 - Linear への自動起票は時間があれば対応（優先度低）
 - 会場のWi-Fiが不安 → モバイル回線を準備しておく（担当未定）`;
-$('sample').onclick = () => { $('notes').value = SAMPLE; };
+$('sample').onclick = () => { $('notes').value = SAMPLE; $('result').classList.add('hidden'); $('live').textContent = 'ここにモデルの思考要約と生成中の JSON が流れます。'; };
 try { $('apikey').value = localStorage.getItem('apikey') || ''; if (!$('notes').value) $('notes').value = SAMPLE; } catch {}
 
 fetch('/api/status').then(r => r.json()).then(s => {
   $('status').textContent = s.hasServerKey ? `サーバー側に API キーあり（${s.model}）` : 'サーバー側に API キーなし。キー欄に入力するか、未入力ならデモモードで動きます。';
-}).catch(() => {});
+}).catch(() => {}).finally(() => {
+  // http://localhost:3000/?autorun=1 で開くと、サンプルメモを入れて自動で生成を開始
+  const q = new URLSearchParams(location.search);
+  if (q.get('autorun') === '1') { $('notes').value = SAMPLE; if (q.get('effort')) $('effort').value = q.get('effort'); $('run').click(); }
+});
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let lastResult = null;

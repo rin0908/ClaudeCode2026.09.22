@@ -10,6 +10,7 @@ npm install
 export ANTHROPIC_API_KEY=sk-ant-...   # 任意。無ければデモモード or 画面から入力
 npm start
 # → http://localhost:3000
+#    http://localhost:3000/?autorun=1 で開くとサンプルメモ入りで自動生成（&effort=xhigh も可）
 ```
 
 ## API キーの渡し方（3通り）
