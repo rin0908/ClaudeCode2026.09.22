@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meeting Minutes AI</title>
+<style>
+  :root { --bg:#f6f7fb; --card:#fff; --ink:#1c1f2a; --muted:#6b7280; --line:#e5e7eb; --accent:#6d4aff; --accent-ink:#fff; --ok:#16a34a; --warn:#d97706; --bad:#dc2626; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f1117; --card:#181b25; --ink:#e7e9f0; --muted:#9aa1b1; --line:#2a2f3d; --accent:#8b6cff; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; line-height:1.5; }
+  header { padding:20px 16px 8px; max-width:1100px; margin:0 auto; }
+  header h1 { margin:0; font-size:22px; }
+  header p { margin:4px 0 0; color:var(--muted); font-size:14px; }
+  main { max-width:1100px; margin:0 auto; padding:8px 16px 40px; display:grid; gap:16px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .card h2 { margin:0 0 10px; font-size:15px; color:var(--muted); font-weight:600; letter-spacing:.02em; }
+  textarea { width:100%; min-height:260px; border:1px solid var(--line); border-radius:8px; padding:10px; font:14px/1.5 inherit; background:transparent; color:inherit; resize:vertical; }
+  input, select { border:1px solid var(--line); border-radius:8px; padding:8px 10px; font:14px inherit; background:transparent; color:inherit; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+  .row label { font-size:13px; color:var(--muted); }
+  button { border:0; border-radius:8px; padding:10px 16px; font:600 14px inherit; cursor:pointer; background:var(--accent); color:var(--accent-ink); }
+  button.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  button:disabled { opacity:.5; cursor:wait; }
+  .status { font-size:13px; color:var(--muted); margin-top:8px; min-height:1.2em; }
+  pre.live { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px; font-size:12px; max-height:220px; overflow:auto; white-space:pre-wrap; word-break:break-all; margin:0; }
+  .thinking { color:var(--muted); font-style:italic; }
+  .full { grid-column: 1 / -1; }
+  ul { margin:6px 0 0; padding-left:20px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; font-size:12px; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; font-weight:600; }
+  .high { background:#fee2e2; color:var(--bad);} .medium { background:#fef3c7; color:var(--warn);} .low { background:#dcfce7; color:var(--ok);}
+  .meta { font-size:12px; color:var(--muted); }
+  details { border:1px solid var(--line); border-radius:8px; padding:8px 12px; margin-top:8px; }
+  details pre { white-space:pre-wrap; font-size:13px; margin:6px 0 0; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🗒️ 会議メモ → 議事録 &amp; アクションアイテム</h1>
+  <p>Claude Fable 5.1 の <b>structured outputs</b>（JSON スキーマ強制）と <b>thinking 要約ストリーミング</b> のデモ</p>
+</header>
+<main>
+  <section class="card">
+    <h2>1. 会議メモを貼り付け</h2>
+    <textarea id="notes"></textarea>
+    <div class="row">
+      <label>effort
+        <select id="effort">
+          <option value="low">low（速い）</option>
+          <option value="medium" selected>medium</option>
+          <option value="high">high</option>
+          <option value="xhigh">xhigh（深く考える）</option>
+        </select>
+      </label>
+      <label>API キー <input id="apikey" type="password" placeholder="sk-ant-...（環境変数があれば空でOK）" size="30"></label>
+    </div>
+    <div class="row">
+      <button id="run">議事録を生成</button>
+      <button id="sample" class="secondary">サンプルメモを入れる</button>
+    </div>
+    <div class="status" id="status"></div>
+  </section>
+
+  <section class="card">
+    <h2>2. ライブ出力（thinking 要約 → JSON）</h2>
+    <pre class="live" id="live">ここにモデルの思考要約と生成中の JSON が流れます。</pre>
+  </section>
+
+  <section class="card full hidden" id="result">
+    <h2>3. 議事録</h2>
+    <div class="row" style="justify-content:space-between; margin-top:0">
+      <h3 id="title" style="margin:0"></h3>
+      <button id="copy" class="secondary">Markdown をコピー</button>
+    </div>
+    <p id="summary"></p>
+    <div class="meta" id="meta"></div>
+    <h4>✅ 決定事項</h4><ul id="decisions"></ul>
+    <h4>📌 アクションアイテム</h4>
+    <table><thead><tr><th>タスク</th><th>担当</th><th>期限</th><th>優先度</th></tr></thead><tbody id="actions"></tbody></table>
+    <h4>❓ 未解決の論点</h4><ul id="questions"></ul>
+    <h4>🐙 Issue 下書き</h4><div id="issues"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const SAMPLE = `9/22 定例 ハッカソン準備MTG
+- 田中さん: テーマは「Fable 5.1 を使った議事録生成」でいく → 決定
+- デモは30分で作る。フロントは1枚のHTMLにする
+- 鈴木さん: APIキーの受け渡し方法を明日までに確認する
+- 発表スライドは佐藤さんが 9/25 までに作成
+- ロゴどうする？ 要検討
+- Linear への自動起票は時間があれば対応（優先度低）
+- 会場のWi-Fiが不安 → モバイル回線を準備しておく（担当未定）`;
+$('sample').onclick = () => { $('notes').value = SAMPLE; };
+try { $('apikey').value = localStorage.getItem('apikey') || ''; if (!$('notes').value) $('notes').value = SAMPLE; } catch {}
+
+fetch('/api/status').then(r => r.json()).then(s => {
+  $('status').textContent = s.hasServerKey ? `サーバー側に API キーあり（${s.model}）` : 'サーバー側に API キーなし。キー欄に入力するか、未入力ならデモモードで動きます。';
+}).catch(() => {});
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let lastResult = null;
+
+$('run').onclick = async () => {
+  const notes = $('notes').value.trim();
+  if (!notes) return alert('メモを入力してください');
+  const key = $('apikey').value.trim();
+  try { localStorage.setItem('apikey', key); } catch {}
+  $('run').disabled = true; $('result').classList.add('hidden');
+  $('live').innerHTML = ''; $('status').textContent = '生成中…';
+  let thinkingEl = null, jsonEl = null;
+
+  const res = await fetch('/api/minutes', { method:'POST', headers: { 'Content-Type':'application/json', ...(key ? {'x-api-key': key} : {}) }, body: JSON.stringify({ notes, effort: $('effort').value }) });
+  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
+  while (true) {
+    const { value, done } = await reader.read(); if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      const chunk = buf.slice(0, idx); buf = buf.slice(idx + 2);
+      const ev = /^event: (.*)$/m.exec(chunk)?.[1]; const data = JSON.parse(/^data: (.*)$/m.exec(chunk)?.[1] ?? '{}');
+      if (ev === 'thinking') { if (!thinkingEl) { thinkingEl = document.createElement('span'); thinkingEl.className = 'thinking'; $('live').appendChild(thinkingEl); } thinkingEl.textContent += data.text; }
+      else if (ev === 'json') { if (!jsonEl) { jsonEl = document.createElement('span'); $('live').appendChild(document.createTextNode('\n\n')); $('live').appendChild(jsonEl); } jsonEl.textContent += data.text; }
+      else if (ev === 'error') { $('status').textContent = 'エラー: ' + data.message; }
+      else if (ev === 'done') { render(data.result, data.meta); }
+      $('live').scrollTop = $('live').scrollHeight;
+    }
+  }
+  $('run').disabled = false;
+};
+
+function render(r, m) {
+  lastResult = r;
+  $('title').textContent = r.title; $('summary').textContent = r.summary;
+  $('meta').textContent = `model: ${m.model} / effort: ${m.effort} / ${m.ms} ms / in ${m.input_tokens} tok, out ${m.output_tokens} tok`;
+  $('decisions').innerHTML = r.decisions.map(d => `<li>${esc(d)}</li>`).join('') || '<li class="meta">なし</li>';
+  $('actions').innerHTML = r.action_items.map(a => `<tr><td>${esc(a.task)}</td><td>${esc(a.owner)}</td><td>${esc(a.due)}</td><td><span class="pill ${a.priority}">${a.priority}</span></td></tr>`).join('') || '<tr><td colspan=4 class="meta">なし</td></tr>';
+  $('questions').innerHTML = r.open_questions.map(q => `<li>${esc(q)}</li>`).join('') || '<li class="meta">なし</li>';
+  $('issues').innerHTML = r.issue_drafts.map(i => `<details><summary><b>${esc(i.title)}</b></summary><pre>${esc(i.body)}</pre></details>`).join('') || '<div class="meta">なし</div>';
+  $('result').classList.remove('hidden'); $('status').textContent = m.demo ? 'デモモードで完了（API キーを入れると Fable 5.1 が本気で書きます）' : '完了';
+}
+
+$('copy').onclick = async () => {
+  if (!lastResult) return; const r = lastResult;
+  const md = [`# ${r.title}`, '', r.summary, '', '## 決定事項', ...r.decisions.map(d => `- ${d}`), '', '## アクションアイテム', '| タスク | 担当 | 期限 | 優先度 |', '|---|---|---|---|', ...r.action_items.map(a => `| ${a.task} | ${a.owner} | ${a.due} | ${a.priority} |`), '', '## 未解決の論点', ...r.open_questions.map(q => `- ${q}`), '', '## Issue 下書き', ...r.issue_drafts.flatMap(i => [`### ${i.title}`, i.body, ''])].join('\n');
+  await navigator.clipboard.writeText(md); $('status').textContent = 'Markdown をコピーしました';
+};
+</script>
+</body>
+</html>

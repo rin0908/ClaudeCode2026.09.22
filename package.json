@@ -1,0 +1,25 @@
+{
+  "name": "meeting-minutes-fable",
+  "version": "1.0.0",
+  "description": "会議メモから議事録とアクションアイテムを生成する Claude Fable 5.1 デモ",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rin0908/ClaudeCode2026.09.22.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/rin0908/ClaudeCode2026.09.22/issues"
+  },
+  "homepage": "https://github.com/rin0908/ClaudeCode2026.09.22#readme",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.127.0",
+    "express": "^5.2.1"
+  },
+  "type": "module"
+}
